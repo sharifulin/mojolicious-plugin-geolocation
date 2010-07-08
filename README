@@ -1,0 +1,69 @@
+NAME
+
+Mojolicious::Plugin::GeoLocation - Geo Location Mojolicious Plugin
+
+SYNOPSIS
+
+	plugin 'geo_location', {
+		geo_ip    => { db => '/usr/local/share/GeoIP/GeoLiteCity.dat' },
+		geo_ip_ru => { db => { dbh => app->db, table => 'ip_geo_base_ru' } },
+		
+		geo_coder    => { api => [ '..', .. ] }, # list of api key
+		geo_coder_ru => { api => [ '..', .. ] }, # list of api key
+	};
+	
+	get '/' => sub {
+		my $self = shift;
+		
+		warn Dumper $self->stash('location'); # returns hash { lat => '..', long => '..', ip => '..', title => '..' }
+	};
+	
+DESCRIPTION
+
+Mojolicous::Plugin::GeoLocation is a plugin to detect location, uses geolat and geolong params or IP address.
+
+Detect geo latitude and longitude:
+
+	$c->req->param('geolat')
+	$c->req->param('geolong')
+
+Detect IP address:
+
+	$c->req->param('ip') ||
+	$c->req->headers->header('X-Real-IP') ||
+	$c->req->headers->header('X-Forwarded-For') ||
+	$c->tx->{'remote_address'}
+
+METHODS
+
+Mojolicious::Plugin::GeoLocation inherits all methods from Mojolicious::Plugin and implements the following new ones.
+
+* register
+
+	$plugin->register;
+
+Register plugin hooks in Mojolicious application.
+
+* ll
+
+	$plugin->ll($c => [ "lat", "long" ]);
+
+Detect location, uses geo lat and long params, based on L<Geo::Geocoder>.
+First: uses Yandex geocoder (http://api.yandex.ru/maps/geocoder/doc/desc/concepts/reverse_geocode.xml), second: uses Google geocoder (http://code.google.com/apis/maps/documentation/geocoding/).
+
+* ip
+
+	$plugin->ip($c => $ip);
+
+Detect location, uses IP, based on L<Geo::IP::RU::IpGeoBase> and L<Geo::IP>.
+First: uses russian IP base (http://ipgeobase.ru), second: uses MaxMind IP base (http://www.maxmind.com/).
+
+SEE ALSO
+
+Mojolicious, Mojolicious::Guides, http://mojolicious.org.
+
+Geo::IP::RU::IpGeoBase, Geo::IP.
+
+AUTHOR
+
+Anatoly Sharifulin <sharifulin@gmail.com>

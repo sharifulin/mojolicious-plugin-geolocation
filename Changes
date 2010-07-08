@@ -1,0 +1,6 @@
+Revision history for Mojolicious-Plugin-GeoLocation
+
+0.03   2010-07-08/13:34
+	* first github.com release
+	* add X-Forwarded-For
+	* more documentation
