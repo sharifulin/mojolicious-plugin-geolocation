@@ -57,10 +57,12 @@ sub register {
 			$self->ll( $c => [ @ll ] );
 		}
 		else {
+			my $for = $c->req->headers->header('X-Forwarded-For');
+			
 			my $ip =
 				$c->req->param('ip')
 			 ||
-				$c->req->headers->header('X-Forwarded-For')
+				( $for && $for !~ /unknown/i ? $for : undef )
 			 ||
 				$c->req->headers->header('X-Real-IP')
 			 ||
