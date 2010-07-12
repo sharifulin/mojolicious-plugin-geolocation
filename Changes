@@ -1,5 +1,9 @@
 Revision history for Mojolicious-Plugin-GeoLocation
 
+0.04   2010-07-12/16:54
+	* add cache for requests
+	* add two helpers: gl_coder and gl_ip
+
 0.03   2010-07-08/13:34
 	* first github.com release
 	* add X-Forwarded-For

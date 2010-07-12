@@ -5,7 +5,7 @@ use warnings;
 
 use base 'Mojolicious::Plugin';
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 =head2 TODO:
 	* сделать опциональное подключение, нежесткое ~ IOLoop
@@ -44,42 +44,51 @@ __PACKAGE__->attr(geo_coder_ru => sub {
 	return Geo::Geocoder->new(type => 'ya', api => $self->conf->{geo_coder_ru}->{api});
 });
 
+# cache for requests
+our $R;
+
 sub register {
 	my ($self, $app, $conf) = @_;
 	
 	$self->conf( $conf );
 	
 	$app->plugins->add_hook(after_static_dispatch => sub {
-		my ($self2, $c) = @_;
-		my @ll = grep { $_ && !/^0+\.0+$/ } $c->req->param('geolat'), $c->req->param('geolong');
+		(undef, my $c) = @_;
 		
-		if (@ll) {
-			$self->ll( $c => [ @ll ] );
-		}
-		else {
-			my $for = $c->req->headers->header('X-Forwarded-For');
-			
-			my $ip =
-				$c->req->param('ip')
-			 ||
-				( $for && $for !~ /unknown/i ? $for : undef )
-			 ||
-				$c->req->headers->header('X-Real-IP')
-			 ||
-				$c->tx->{remote_address}
-			;
-			$self->ip( $c => $ip );
-		}
+		# lat + lon
+		my $ll  = [ grep { $_ && !/^0+\.0+$/ } $c->req->param('geolat'), $c->req->param('geolong') ];
+		
+		# ip
+		my $for = $c->req->headers->header('X-Forwarded-For');
+		my $ip  =
+			$c->req->param('ip')
+		 ||
+			( $for && $for !~ /unknown/i ? $for : undef )
+		 ||
+			$c->req->headers->header('X-Real-IP')
+		 ||
+			$c->tx->{remote_address}
+		;
+		
+		my $key = join '-', @$ll, $ip;
+		
+		$R->{$key} ||= @$ll ? $self->coder( $ll ) : $self->ip( $ip );
+		
+		$c->stash(location => $R->{$key});
 	});
+	
+	$app->renderer->add_helper( gl_coder => sub { shift; $self->coder(@_) });
+	$app->renderer->add_helper( gl_ip    => sub { shift; $self->ip   (@_) });
 }
 
-sub ll {
-	my($self, $c, $ll) = @_;
+sub coder {
+	my($self, $q) = @_;
 	my $data;
 	
+	my $ll = $q && ref $q eq 'ARRAY';
 	for my $geo (
-		[ $self->geo_coder_ru, join(',', reverse @$ll), 'coder_ru' ],
-		[ $self->geo_coder,    join(',',         @$ll), 'coder'    ], # XXX: с типом пока не понятно
+		[ $self->geo_coder_ru, $ll ? join ',', reverse @$q : $q, 'coder_ru' ],
+		[ $self->geo_coder,    $ll ? join ',',         @$q : $q, 'coder'    ], # XXX: с типом пока не понятно
 	) {
 		$self->client->get(
 			$geo->[0]->url(q => $geo->[1]),
@@ -102,24 +111,21 @@ sub ll {
 	
 	my $l = $data->{coder_ru} || $data->{coder};
 	
-	$c->stash(location => $l
-		? {
-			lat   => $l->{ll}->[0],
-			lon   => $l->{ll}->[1],
-			title => join(', ', grep { $_ } @{ $l->{title}||[] }),
-		}
-		: undef
-	);
+	return {
+		lat   => $l->{ll}->[0],
+		lon   => $l->{ll}->[1],
+		title => join(', ', grep { $_ } @{ $l->{title}||[] }),
+	} if $l;
 }
 
 sub ip {
-	my($self, $c, $ip) = @_;
+	my($self, $ip) = @_;
 	my $data;
 	
 	if (($data) = $ip && $self->geo_ip_ru->find_by_ip( $ip )) {
 		use utf8;
 		
-		$c->stash(location => {
+		return {
 			ip    => $ip,
 			lat   => $data->{latitude},
 			lon   => $data->{longitude},
@@ -127,10 +133,10 @@ sub ip {
 				$data->{city} eq $data->{region} ? $data->{city} : ( @$data{qw(city region)}),
 				'Россия',
 			),
-		});
+		};
 	}
 	elsif ($data = $ip && $self->geo_ip->record_by_addr( $ip )) {
-		$c->stash(location => {
+		return {
 			ip    => $ip,
 			lat   => $data->latitude,
 			lon   => $data->longitude,
@@ -139,10 +145,7 @@ sub ip {
 				$data->region_name,
 				grep { !/Anonymous Proxy/ } $data->country_name,
 			),
-		});
-	}
-	else {
-		$c->stash(location => undef);
+		};
 	}
 }
 
@@ -168,6 +171,12 @@ Mojolicious::Plugin::GeoLocation - Geo Location Mojolicious Plugin
 		my $self = shift;
 		
 		warn Dumper $self->stash('location'); # returns hash { lat => '..', long => '..', ip => '..', title => '..' }
+	};
+	
+	get '/coder' => sub {
+		my $self = shift;
+		
+		warn $self->helper->gl_coder('Moscow');
 	};
 	
 =head1 DESCRIPTION
@@ -196,17 +205,21 @@ L<Mojolicious::Plugin> and implements the following new ones.
 	$plugin->register;
 
 Register plugin hooks in L<Mojolicious> application.
+Add 2 helpers:
 
-=head2 C<ll>
+	$self->helper('gl_coder', '..');
+	$self->helper('gl_ip',    '..');
 
-	$plugin->ll($c => [ "lat", "long" ]);
+=head2 C<coder>
+
+	$plugin->coder( [ $lat, $long ] );
 
 Detect location, uses geo lat and long params, based on L<Geo::Geocoder>.
 First: uses Yandex geocoder (L<http://api.yandex.ru/maps/geocoder/doc/desc/concepts/reverse_geocode.xml>), second: uses Google geocoder (L<http://code.google.com/apis/maps/documentation/geocoding/>).
 
 =head2 C<ip>
 
-	$plugin->ip($c => $ip);
+	$plugin->ip( $ip );
 
 Detect location, uses IP, based on L<Geo::IP::RU::IpGeoBase> and L<Geo::IP>.
 First: uses russian IP base (L<http://ipgeobase.ru>), second: uses MaxMind IP base (L<http://www.maxmind.com/>).
