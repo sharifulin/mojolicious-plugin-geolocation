@@ -1,0 +1,124 @@
+
+=head1 NAME
+
+Mojolicious::Plugin::GeoLocation - Geo Location Mojolicious Plugin
+
+=head1 SYNOPSIS
+
+	plugin 'geo_location', {
+		geo_ip    => { db => '/usr/local/share/GeoIP/GeoLiteCity.dat' },
+		geo_ip_ru => { db => { dbh => app->db, table => 'ip_geo_base_ru' } },
+		
+		geo_coder    => { api => [ '..', .. ] }, # list of api key
+		geo_coder_ru => { api => [ '..', .. ] }, # list of api key
+	};
+	
+	get '/' => sub {
+		my $self = shift;
+		
+		warn Dumper $self->stash('location'); # returns hash { lat => '..', long => '..', ip => '..', title => '..' }
+	};
+	
+	get '/coder' => sub {
+		my $self = shift;
+		
+		warn $self->helper->gl_coder('Moscow');
+	};
+	
+=head1 DESCRIPTION
+
+L<Mojolicous::Plugin::GeoLocation> is a plugin to detect location, uses geolat and geolong params or IP address.
+
+Detect geo latitude and longitude:
+
+	$c->req->param('geolat')
+	$c->req->param('geolong')
+
+Detect IP address:
+
+	$c->req->param('ip') ||
+	$c->req->headers->header('X-Real-IP') ||
+	$c->req->headers->header('X-Forwarded-For') ||
+	$c->tx->{'remote_address'}
+
+=head1 METHODS
+
+L<Mojolicious::Plugin::GeoLocation> inherits all methods from
+L<Mojolicious::Plugin> and implements the following new ones.
+
+=head2 C<register>
+
+	$plugin->register;
+
+Register plugin hooks in L<Mojolicious> application.
+Add 2 helpers:
+
+	$self->helper('gl_coder', '..');
+	$self->helper('gl_ip',    '..');
+
+=head2 C<coder>
+
+	$plugin->coder( [ $lat, $long ] );
+
+Detect location, uses geo lat and long params, based on L<Geo::Geocoder>.
+First: uses Yandex geocoder (L<http://api.yandex.ru/maps/geocoder/doc/desc/concepts/reverse_geocode.xml>), second: uses Google geocoder (L<http://code.google.com/apis/maps/documentation/geocoding/>).
+
+=head2 C<ip>
+
+	$plugin->ip( $ip );
+
+Detect location, uses IP, based on L<Geo::IP::RU::IpGeoBase> and L<Geo::IP>.
+First: uses russian IP base (L<http://ipgeobase.ru>), second: uses MaxMind IP base (L<http://www.maxmind.com/>).
+
+=head1 SEE ALSO
+
+L<Mojolicious>, L<Mojolicious::Guides>, L<http://mojolicious.org>.
+
+L<Geo::IP::RU::IpGeoBase>, L<Geo::IP>.
+
+=head1 AUTHOR
+
+Anatoly Sharifulin <sharifulin@gmail.com>
+
+=head1 BUGS
+
+Please report any bugs or feature requests to C<bug-mojolicious-plugin-geolocation at rt.cpan.org>, or through
+the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.htMail?Queue=Mojolicious-Plugin-GeoLocation>.  We will be notified, and then you'll
+automatically be notified of progress on your bug as we make changes.
+
+=over 5
+
+=item * Github
+
+L<http://github.com/sharifulin/Mojolicious-Plugin-GeoLocation/tree/master>
+
+=item * RT: CPAN's request tracker
+
+L<http://rt.cpan.org/NoAuth/Bugs.htMail?Dist=Mojolicious-Plugin-GeoLocation>
+
+=item * AnnoCPAN: Annotated CPAN documentation
+
+L<http://annocpan.org/dist/Mojolicious-Plugin-GeoLocation>
+
+=item * CPANTS: CPAN Testing Service
+
+L<http://cpants.perl.org/dist/overview/Mojolicious-Plugin-GeoLocation>
+
+=item * CPAN Ratings
+
+L<http://cpanratings.perl.org/d/Mojolicious-Plugin-GeoLocation>
+
+=item * Search CPAN
+
+L<http://search.cpan.org/dist/Mojolicious-Plugin-GeoLocation>
+
+=back
+
+=head1 COPYRIGHT & LICENSE
+
+Copyright (C) 2010 by Anatoly Sharifulin.
+
+This program is free software; you can redistribute it and/or modify it
+under the same terms as Perl itself.
+
+=cut
